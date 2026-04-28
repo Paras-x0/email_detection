@@ -3,26 +3,22 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# -- 1. Load Data ----------------------------------------------------------------
 raw_mail_data = pd.read_csv('mail_data.csv')
 
-# Replace null values with empty string
 mail_data = raw_mail_data.where(pd.notnull(raw_mail_data), '')
 print(f"Dataset shape: {mail_data.shape}")
 print(mail_data.head())
 
-# -- 2. Label Encoding -----------------------------------------------------------
 label_map = {'spam': 0, 'ham': 1}
 mail_data['Category'] = mail_data['Category'].map(label_map)
 
 print("\nLabel distribution:")
 print(mail_data['Category'].value_counts())
 
-# -- 3. Split Features & Labels --------------------------------------------------
 X = mail_data['Message']
 Y = mail_data['Category']
 
@@ -32,12 +28,7 @@ X_train, X_test, Y_train, Y_test = train_test_split(
 
 print(f"\nTraining samples: {X_train.shape[0]} | Test samples: {X_test.shape[0]}")
 
-# -- 4. TF-IDF Vectorization -----------------------------------------------------
-feature_extraction = TfidfVectorizer(
-    min_df=1,
-    stop_words='english',
-    lowercase=True
-)
+feature_extraction = TfidfVectorizer(min_df=1, stop_words='english', lowercase=True)
 
 X_train_features = feature_extraction.fit_transform(X_train)
 X_test_features  = feature_extraction.transform(X_test)
@@ -45,11 +36,9 @@ X_test_features  = feature_extraction.transform(X_test)
 Y_train = Y_train.astype('int')
 Y_test  = Y_test.astype('int')
 
-# -- 5. Train Model --------------------------------------------------------------
 model = LogisticRegression(max_iter=1000)
 model.fit(X_train_features, Y_train)
 
-# -- 6. Evaluate -----------------------------------------------------------------
 for split_name, X_feat, Y_true in [
     ("Training", X_train_features, Y_train),
     ("Test",     X_test_features,  Y_test)
@@ -60,9 +49,40 @@ for split_name, X_feat, Y_true in [
     print(f"Accuracy: {acc:.4f}")
     print(classification_report(Y_true, preds, target_names=['Spam', 'Ham']))
 
-# -- 7. Prediction Function ------------------------------------------------------
+def plot_confusion_matrix(Y_true, Y_pred, title='Confusion Matrix'):
+    cm = confusion_matrix(Y_true, Y_pred)
+    cm_percent = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis] * 100
+
+    annot = np.array([
+        [f"{cm[i,j]}\n({cm_percent[i,j]:.1f}%)" for j in range(cm.shape[1])]
+        for i in range(cm.shape[0])
+    ])
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+    sns.heatmap(
+        cm,
+        annot=annot,
+        fmt='',
+        cmap='Blues',
+        xticklabels=['Spam', 'Ham'],
+        yticklabels=['Spam', 'Ham'],
+        linewidths=0.5,
+        linecolor='white',
+        ax=ax
+    )
+    ax.set_title(title, fontsize=14, fontweight='bold', pad=14)
+    ax.set_xlabel('Predicted Label', fontsize=12)
+    ax.set_ylabel('True Label', fontsize=12)
+    plt.tight_layout()
+    plt.show()
+
+Y_train_pred = model.predict(X_train_features)
+Y_test_pred  = model.predict(X_test_features)
+
+plot_confusion_matrix(Y_train, Y_train_pred, title='Confusion Matrix — Training Set')
+plot_confusion_matrix(Y_test,  Y_test_pred,  title='Confusion Matrix — Test Set')
+
 def predict_mail(text: str) -> None:
-    """Predict whether a given email is spam or ham with confidence."""
     if not text.strip():
         print("No message entered. Please type something.")
         return
@@ -78,9 +98,7 @@ def predict_mail(text: str) -> None:
     print(f"Confidence : Ham={confidence[1]:.2%}  |  Spam={confidence[0]:.2%}")
     print("-" * 60)
 
-# -- 8. Interactive Mail Checker -------------------------------------------------
 def run_mail_checker():
-    """Interactive loop for the user to check multiple emails."""
     print("\n" + "=" * 60)
     print("         Welcome to the Spam Mail Checker")
     print("=" * 60)
@@ -94,29 +112,20 @@ def run_mail_checker():
 
         while True:
             line = input()
-
-            # exit conditions
             if line.strip().lower() in ('quit', 'exit', 'q'):
                 print("\nExiting mail checker. Goodbye.")
                 return
-
-            # end of message signal
             if line.strip().upper() == 'END':
                 break
-
             lines.append(line)
 
-        # join all lines into one message
         user_input = ' '.join(lines).strip()
-
-        # empty input guard
         if not user_input:
             print("Message cannot be empty. Please try again.")
             continue
 
         predict_mail(user_input)
 
-        # ask if user wants to check another mail
         again = input("\nCheck another mail? (yes/no): ").strip().lower()
         if again not in ('yes', 'y'):
             print("\nExiting mail checker. Goodbye.")
